@@ -1,10 +1,8 @@
-use glory_tunnel::{Config, Script};
+use glory_tunnel::Config;
 
 fn main() {
-    if let Some(args) = Config::from_args() {
-        let script = Script::from(args);
-
-        if let Err(e) = script.run() {
+    if let Some(config) = Config::from_args() {
+        if let Err(e) = config.run() {
             println!("{}", e)
         }
     } else {

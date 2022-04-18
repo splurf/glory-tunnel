@@ -8,6 +8,7 @@ use {
             Read, Result, Write,
         },
         net::TcpStream,
+        sync::Arc,
         thread::{sleep, spawn, JoinHandle},
         time::Duration,
     },
@@ -15,7 +16,7 @@ use {
 
 pub struct Tunnel {
     stream_username: String,
-    stream: Lock<TcpStream>,
+    stream: Arc<TcpStream>,
     buffered_stdin: Term,
     height: Lock<usize>,
     queue: Lock<Queue>,
@@ -28,7 +29,7 @@ impl Tunnel {
     pub fn new(stream_username: String, stream: TcpStream) -> Result<Self> {
         stream.set_nonblocking(true)?;
 
-        let stream = lock(stream);
+        let stream = Arc::new(stream);
         let buffered_stdin = Term::buffered_stdout();
         let height = lock(usize::MIN);
         let queue = lock(Queue::new(height.clone()));
@@ -60,32 +61,24 @@ impl Tunnel {
                 if let Ok(busy) = thread_busy.read() {
                     if !*busy {
                         drop(busy);
-                        if let Ok(mut stream) = thread_stream.write() {
-                            let mut buf = [0; 64];
+                        let mut buf = [0; 64];
 
-                            if let Err(e) = stream.read(buf.as_mut_slice()) {
-                                match e.kind() {
-                                    ConnectionReset | TimedOut => {
-                                        if let Ok(mut connected) = thread_connected.write() {
-                                            *connected = false;
-                                            break Ok(());
-                                        }
-                                    }
-                                    WouldBlock => sleep(TIMER),
-                                    _ => {
-                                        println!("Unexpected Error: {}", e.kind())
+                        if let Err(e) = (&*thread_stream).read(buf.as_mut_slice()) {
+                            match e.kind() {
+                                ConnectionReset | TimedOut => {
+                                    if let Ok(mut connected) = thread_connected.write() {
+                                        *connected = false;
+                                        break Ok(());
                                     }
                                 }
-                            } else {
-                                drop(stream);
-
-                                if let Ok(mut queue) = thread_queue.write() {
-                                    queue.enqueue(
-                                        String::from_utf8_lossy(&buf),
-                                        "~".to_string(),
-                                        true,
-                                    );
+                                WouldBlock => sleep(TIMER),
+                                _ => {
+                                    println!("Unexpected Error: {}", e.kind())
                                 }
+                            }
+                        } else {
+                            if let Ok(mut queue) = thread_queue.write() {
+                                queue.enqueue(String::from_utf8_lossy(&buf), "~".to_string(), true);
                             }
                         }
                     }
@@ -128,9 +121,8 @@ impl Tunnel {
                                 if let Ok(mut busy) = thread_busy.write() {
                                     *busy = true;
 
-                                    if let Ok(mut stream) = thread_stream.write() {
-                                        stream.write_all(m.content().as_bytes())?;
-                                    }
+                                    (&*thread_stream).write_all(m.content().as_bytes())?;
+
                                     *busy = false
                                 }
                             }
