@@ -104,6 +104,7 @@ impl Tunnel {
 
         spawn(move || -> Result<()> {
             let mut stdout = Term::buffered_stdout();
+            stdout.clear_screen()?;
 
             let mut prev = 0;
 
@@ -112,12 +113,10 @@ impl Tunnel {
                     *height = stdout.size().0 as usize - 1;
 
                     if prev != *height {
-                        stdout.clear_to_end_of_screen()?;
+                        stdout.clear_screen()?;
                         stdout.move_cursor_to(0, 0)?;
                         stdout.write_all(thread_stream_username.as_bytes())?;
-                        stdout.flush()?;
                     }
-
                     prev = *height;
 
                     let mut h = *height - 2;
@@ -168,8 +167,6 @@ impl Tunnel {
     pub fn init(self) -> Result<()> {
         let _listener = self.listener_handle();
         let _writer = self.writer_handle();
-
-        self.buffered_stdin.flush()?;
 
         loop {
             if let Ok(k) = self.buffered_stdin.read_key() {
