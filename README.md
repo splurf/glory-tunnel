@@ -2,7 +2,7 @@
 A minimal 1 on 1 terminal messenger cli written purely in rust.
 
 ## Description
-This is basically an extremely minimalistic version of any sort of messager piece of software, except it's only meant for 1 on 1 sessions and everything takes place in a terminal.
+This is basically an extremely minimalistic version of any sort of messenger piece of software, except it's only meant for 1 on 1 sessions and everything takes place in a terminal.
 
 ## Purpose
 This was just a fun little experiement messing with the `console` crate as well as rust's ability with concurency and networking.
