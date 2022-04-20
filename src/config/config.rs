@@ -27,38 +27,29 @@ impl Config {
             .map(|a| a.to_string_lossy().to_string())
             .collect::<Vec<String>>();
 
-        if args.len() == 5 {
-            let service = Service::from_str(args[1].trim())?;
-
-            let address = SocketAddr::from_str(args[2].trim())?;
-
-            let username = {
-                let arg = args[3].trim();
-
-                if arg.is_empty() || arg == " ".repeat(arg.len()) {
-                    Err(ConfigError::UsernameError("Username is empty".to_string()))
-                } else if arg.len() > 32 {
-                    Err(ConfigError::UsernameError(
-                        "Username is too long (32 character limit)".to_string(),
-                    ))
-                } else {
-                    Ok(arg.to_string())
-                }
-            }?;
-
-            let password = {
-                let arg = args[4].trim();
-                let mut hasher = Sha256::new();
-                hasher.update(arg);
-                hasher.update(SALT);
-                format!("{:x}", hasher.finalize())
-            };
-
+        if let [service, address, username, password] = &args[1..] {
             Ok(Self {
-                service,
-                address,
-                username,
-                password,
+                service: Service::from_str(service.trim())?,
+                address: SocketAddr::from_str(address.trim())?,
+                username: {
+                    let s = username.trim();
+                    if s.is_empty() || s == " ".repeat(s.len()) {
+                        Err(ConfigError::UsernameError("Username is empty".to_string()))
+                    } else if s.len() > 32 {
+                        Err(ConfigError::UsernameError(
+                            "Username is too long (32 character limit)".to_string(),
+                        ))
+                    } else {
+                        Ok(s.to_string())
+                    }
+                }?,
+                password: {
+                    let p = password.trim();
+                    let mut hasher = Sha256::new();
+                    hasher.update(p);
+                    hasher.update(SALT);
+                    format!("{:x}", hasher.finalize())
+                },
             })
         } else {
             Err(ConfigError::ArgumentError(
