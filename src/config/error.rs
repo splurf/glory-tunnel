@@ -1,16 +1,39 @@
-use std::net::AddrParseError;
+use std::{io, net::AddrParseError, result};
+
+pub type Result<T> = result::Result<T, Error>;
 
 #[derive(Debug)]
-pub enum ConfigError {
-    ArgumentError(String),
-    ServiceError(String),
-    AddressError(String),
-    UsernameError(String),
-    PasswordError(String),
+pub enum ErrorKind {
+    Argument,
+    Service,
+    Address,
+    Username,
+    Password,
 }
 
-impl From<AddrParseError> for ConfigError {
+#[derive(Debug)]
+pub struct Error {
+    kind: ErrorKind,
+    error: String,
+}
+
+impl Error {
+    pub fn new<S: AsRef<str>>(kind: ErrorKind, error: S) -> Self {
+        Self {
+            kind,
+            error: error.as_ref().to_string(),
+        }
+    }
+}
+
+impl From<AddrParseError> for Error {
     fn from(e: AddrParseError) -> Self {
-        Self::AddressError(e.to_string())
+        Self::new(ErrorKind::Address, e.to_string())
+    }
+}
+
+impl From<Error> for io::Error {
+    fn from(e: Error) -> Self {
+        Self::new(io::ErrorKind::Other, format!("{:?}: {}", e.kind, e.error))
     }
 }

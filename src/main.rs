@@ -1,12 +1,14 @@
-use glory_tunnel::Config;
+mod config;
+mod tools;
 
-fn main() {
-    match Config::from_args() {
-        Ok(config) => {
-            if let Err(e) = config.run() {
-                println!("{}", e)
-            }
-        }
-        Err(e) => println!("{:?}", e),
-    }
+use {
+    config::Config,
+    std::io::{Error, Result},
+    tools::Tunnel,
+};
+
+fn main() -> Result<()> {
+    let config = Config::from_args().map_err(Error::from)?;
+    let tunnel = Tunnel::try_from(config)?;
+    tunnel.init()
 }

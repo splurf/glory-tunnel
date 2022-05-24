@@ -1,19 +1,24 @@
 use {
-    super::{ConfigError, Service},
-    crate::Tunnel,
+    super::{Error, ErrorKind, Result, Service},
     sha2::{Digest, Sha256},
-    std::{
-        env::args_os,
-        io::{Error, Read, Write},
-        net::{SocketAddr, TcpStream},
-        str::FromStr,
-    },
+    std::{env::args_os, net::SocketAddr, str::FromStr},
 };
 
+//  This is obviously publicized so I might end up making this into an environmental variable
 const SALT: &str = "saltmakesfoodtastegood";
 
+fn validate<T>(s: &String, f: impl FnOnce(&str) -> T, kind: ErrorKind) -> Result<T> {
+    let s = s.trim();
+    if s.is_empty() || s == " ".repeat(s.len()) {
+        Err(Error::new(kind, "Empty"))
+    } else if s.len() > 32 {
+        Err(Error::new(kind, "Too long"))
+    } else {
+        Ok(f(s))
+    }
+}
+
 #[derive(Debug)]
-#[non_exhaustive]
 pub struct Config {
     service: Service,
     address: SocketAddr,
@@ -22,138 +27,49 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn from_args() -> Result<Self, ConfigError> {
+    pub fn from_args() -> Result<Self> {
         let args = args_os()
-            .map(|a| a.to_string_lossy().to_string())
-            .collect::<Vec<String>>();
+            .map(|a| Some(a.to_str()?.to_string()))
+            .collect::<Option<Vec<String>>>()
+            .ok_or(Error::new(ErrorKind::Argument, "Invalid argument data"))?;
 
         if let [service, address, username, password] = &args[1..] {
             Ok(Self {
-                service: Service::from_str(service.trim())?,
-                address: SocketAddr::from_str(address.trim())?,
-                username: {
-                    let s = username.trim();
-                    if s.is_empty() || s == " ".repeat(s.len()) {
-                        Err(ConfigError::UsernameError("Username is empty".to_string()))
-                    } else if s.len() > 32 {
-                        Err(ConfigError::UsernameError(
-                            "Username is too long (32 character limit)".to_string(),
-                        ))
-                    } else {
-                        Ok(s.to_string())
-                    }
-                }?,
-                password: {
-                    let p = password.trim();
-                    let mut hasher = Sha256::new();
-                    hasher.update(p);
-                    hasher.update(SALT);
-                    format!("{:x}", hasher.finalize())
-                },
+                service: validate(service, Service::from_str, ErrorKind::Service)??,
+                address: validate(address, SocketAddr::from_str, ErrorKind::Address)??,
+                username: validate(username, ToString::to_string, ErrorKind::Username)?,
+                password: validate(
+                    password,
+                    |s| {
+                        let mut hasher = Sha256::new();
+                        hasher.update(s);
+                        hasher.update(SALT);
+                        format!("{:x}", hasher.finalize())
+                    },
+                    ErrorKind::Password,
+                )?,
             })
         } else {
-            Err(ConfigError::ArgumentError(
-                "Invalid number of arguments (5 required)".to_string(),
+            Err(Error::new(
+                ErrorKind::Argument,
+                "Invalid number of arguments (5 required)",
             ))
         }
     }
 
-    pub fn service(&self) -> Service {
-        self.service.clone()
+    pub fn service(&self) -> &Service {
+        &self.service
     }
 
-    pub fn address(&self) -> SocketAddr {
-        self.address
+    pub fn address(&self) -> &SocketAddr {
+        &self.address
     }
 
-    pub fn username(&self) -> String {
-        self.username.clone()
+    pub fn username(&self) -> &str {
+        &self.username
     }
 
-    pub fn password(&self) -> String {
-        self.password.clone()
-    }
-
-    pub fn run(self) -> Result<(), Error> {
-        match self.service() {
-            Service::Host => {
-                use std::net::{Shutdown, TcpListener};
-
-                let server = TcpListener::bind(self.address())?;
-
-                let accept = |mut stream: TcpStream| -> Result<Option<TcpStream>, Error> {
-                    // The size of a Sha256 hash
-                    let mut buf = [0; 64];
-
-                    // The stream will always send the hash of their provided password, meaning, the size of their content will always be 64 bytes
-                    stream.read_exact(&mut buf)?;
-
-                    let valid = buf == self.password().as_bytes();
-
-                    // To prevent from having a `write_all` statement for each condition below
-                    stream.write_all(&[valid as u8; 1])?;
-
-                    Ok(if valid {
-                        Some(stream)
-                    } else {
-                        stream.shutdown(Shutdown::Both)?;
-                        None
-                    })
-                };
-
-                println!("Waiting for incoming connection...\n");
-
-                for stream in server.incoming().filter_map(Result::ok) {
-                    print!("{:?} : ", stream.local_addr()?);
-
-                    if let Ok(Some(mut stream)) = accept(stream) {
-                        println!("Done");
-
-                        //  Receive the client's username
-                        let mut buf = [0; 32];
-                        stream.read(&mut buf)?;
-
-                        // Send the host's username
-                        stream.write_all(self.username().as_bytes())?;
-
-                        //  Initiate tunnel connection
-                        let tunnel =
-                            Tunnel::new(String::from_utf8_lossy(&buf).to_string(), stream)?;
-                        tunnel.init()?;
-                        break;
-                    } else {
-                        println!("Incorrect Password")
-                    }
-                }
-                Ok(())
-            }
-            Service::Client => {
-                println!("Attempting to connect...");
-
-                let mut stream = TcpStream::connect(self.address())?;
-                stream.write_all(self.password().as_bytes())?;
-
-                let mut buf = [0; 1];
-                stream.read_exact(&mut buf)?;
-
-                if buf[0] == 1 {
-                    println!("Done");
-
-                    // Send the client's username
-                    stream.write_all(self.username().as_bytes())?;
-
-                    //  Receive the host's username
-                    let mut buf = [0; 32];
-                    stream.read(&mut buf)?;
-
-                    //  Initiate tunnel connection
-                    let tunnel = Tunnel::new(String::from_utf8_lossy(&buf).to_string(), stream)?;
-                    tunnel.init()?;
-                } else {
-                    println!("Incorrect Password")
-                }
-                Ok(())
-            }
-        }
+    pub fn password(&self) -> &str {
+        &self.password
     }
 }

@@ -6,20 +6,20 @@ pub struct Message {
 }
 
 impl Message {
-    pub fn new<T: AsRef<str>>(s: T, owner: String, drafted: bool) -> Self {
+    pub fn new<T: AsRef<str>>(s: T, owner: &str, drafted: bool) -> Self {
         Self {
             content: s.as_ref().to_string(),
-            owner,
+            owner: owner.to_string(),
             drafted,
         }
     }
 
-    pub fn content(&self) -> String {
-        self.content.clone()
+    pub fn content(&self) -> &str {
+        &self.content
     }
 
-    pub fn owner(&self) -> String {
-        self.owner.clone()
+    pub fn owner(&self) -> &str {
+        &self.owner
     }
 
     pub fn undraft(&mut self) -> bool {

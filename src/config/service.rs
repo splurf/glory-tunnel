@@ -1,20 +1,20 @@
-use super::ConfigError;
+use super::{Error, ErrorKind, Result};
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum Service {
     Host,
     Client,
 }
 
 impl Service {
-    pub fn from_str<T: AsRef<str>>(s: T) -> Result<Self, ConfigError> {
-        match s.as_ref() {
+    pub fn from_str(s: &str) -> Result<Self> {
+        match s {
             "--host" => Ok(Self::Host),
             "--connect" => Ok(Self::Client),
-            r @ _ => Err(ConfigError::ServiceError(format!(
-                "Unknown service argument provided ({})",
-                r
-            ))),
+            _ => Err(Error::new(
+                ErrorKind::Service,
+                format!("Unknown service argument provided ({})", s),
+            )),
         }
     }
 }

@@ -1,6 +1,5 @@
 use {
-    super::Message,
-    crate::Lock,
+    super::{Lock, Message},
     std::collections::{vec_deque::IterMut, VecDeque},
 };
 
@@ -18,7 +17,7 @@ impl Queue {
         }
     }
 
-    pub fn enqueue<T: AsRef<str>>(&mut self, s: T, owner: String, drafted: bool) {
+    pub fn enqueue<T: AsRef<str>>(&mut self, s: T, owner: &str, drafted: bool) {
         let n = self.data.len();
 
         self.data.push_front(Message::new(s, owner, drafted));
