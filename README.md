@@ -15,7 +15,5 @@ This was just a fun little experiment messing with the `console` crate as well a
 
 **USERNAME** doesn't have to be the same to join the other person. It is only an identifier.
 
-**ADDR:PORT** and **PASSWORD** need to match each other.
-
 ## Notes
 I've only run this on a select few amount of different terminals. The development of this project took place in VSCode where I used the integrated terminal for all of my testings. This terminal works with glory-tunnel's terminal manipulation perfectly fine but the Windows command prompt doesn't do too hot. I honestly didn't spend too much time on this project so there may be a few blocking issues here and there, but for the most part, if run in a compatible terminal, it runs great and extremely smooth utilizing little to zero resources.
